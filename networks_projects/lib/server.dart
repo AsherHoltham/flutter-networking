@@ -5,24 +5,24 @@ import 'dart:convert';
 
 const port = int.fromEnvironment('APP_PORT', defaultValue: 9203);
 
-class ChatData {
+class ChatLog {
   String mMessage;
   String mUser;
-  ChatData(this.mMessage, this.mUser);
+  ChatLog(this.mMessage, this.mUser);
 }
 
 class SharedData {
   SharedData();
-  List<ChatData> mChatLog = [];
+  List<ChatLog> mChatLog = [];
   void chat(String message, String user) {
-    mChatLog.add(ChatData(message, user));
+    mChatLog.add(ChatLog(message, user));
   }
 }
 
 class ServerNode {
   Socket? mFirstPlayer;
   Socket? mSecondPlayer;
-  final SharedData mData;
+  SharedData mData;
   final String mOutputMessage;
 
   ServerNode(
@@ -64,7 +64,7 @@ class ServerController extends Cubit<ServerNode> {
             "First Player Connected, Awaiting second player...",
           ),
         );
-        _listenToClient(client, "Player 1");
+        _listenToClient(client, "Player 1 Joined");
       } else if (state.mSecondPlayer == null) {
         emit(
           ServerNode(
@@ -74,7 +74,7 @@ class ServerController extends Cubit<ServerNode> {
             "Both Players Connected!",
           ),
         );
-        _listenToClient(client, "Player 2");
+        _listenToClient(client, "Player 2 Joined");
       } else {
         client.write('Server full!\n');
         client.close();
@@ -83,29 +83,24 @@ class ServerController extends Cubit<ServerNode> {
   }
 
   void _listenToClient(Socket client, String playerID) {
-    client.listen(
-      (data) {
-        final message = utf8.decode(data).trim();
-        final logEntry = "$playerID: $message";
+    client.listen((data) {
+      final String message = utf8.decode(data).trim();
+      final String logEntry = "$playerID: $message";
 
-        final updatedLog = List<String>.from(state.chatLog)..add(logEntry);
-        emit(
-          ServerNode(
-            state.mFirstPlayer,
-            state.mSecondPlayer,
-            "Message Received from $playerID",
-            updatedLog,
-          ),
-        );
+      state.mData.chat(message, playerID);
+      emit(
+        ServerNode(
+          state.mFirstPlayer,
+          state.mSecondPlayer,
+          state.mData,
+          "Message Received from $playerID",
+        ),
+      );
 
-        // Broadcasting message to both players
-        state.mFirstPlayer?.write("$logEntry\n");
-        state.mSecondPlayer?.write("$logEntry\n");
-      },
-      onDone: () {
-        emit(ServerNode(null, null, "$playerID disconnected.", state.chatLog));
-      },
-    );
+      // Broadcasting message to both players
+      state.mFirstPlayer?.write("$logEntry\n");
+      state.mSecondPlayer?.write("$logEntry\n");
+    });
   }
 }
 
@@ -120,7 +115,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Networking Labs',
+      title: 'Server',
       theme: ThemeData(),
       home: const NetworkingMasterNode(title: 'Chatter Lab'),
     );
@@ -138,6 +133,16 @@ class NetworkingMasterNode extends StatefulWidget {
 class _NetworkingMasterPage extends State<NetworkingMasterNode> {
   @override
   Widget build(BuildContext context) {
-    return Scaffold();
+    return BlocProvider(
+      create: (_) => ServerController(),
+      child: BlocBuilder<ServerController, ServerNode>(
+        builder: (context, state) {
+          // Use the provided 'state' directly here.
+          return Scaffold(
+            body: Text(state.mOutputMessage),
+          ); // Replace with your widget tree that uses 'state'
+        },
+      ),
+    );
   }
 }
