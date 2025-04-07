@@ -13,9 +13,10 @@ class ChatLog {
 
 class SharedData {
   SharedData();
-  List<ChatLog> mChatLog = [];
+  Map<int, ChatLog> mChatLog = {};
+  int mIndex = 0;
   void chat(String message, String user) {
-    mChatLog.add(ChatLog(message, user));
+    mChatLog[mIndex] = ChatLog(message, user);
   }
 }
 
@@ -115,6 +116,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      debugShowCheckedModeBanner: false,
       title: 'Server',
       theme: ThemeData(),
       home: const NetworkingMasterNode(title: 'Chatter Lab'),
@@ -139,7 +141,28 @@ class _NetworkingMasterPage extends State<NetworkingMasterNode> {
         builder: (context, state) {
           // Use the provided 'state' directly here.
           return Scaffold(
-            body: Text(state.mOutputMessage),
+            body: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16.0),
+                  decoration: BoxDecoration(
+                    color: Colors.black87,
+                    borderRadius: BorderRadius.circular(8.0),
+                    border: Border.all(color: Colors.grey),
+                  ),
+                  constraints: const BoxConstraints(
+                    maxHeight: 200, // Limits the height; adjust as needed.
+                  ),
+                  child: SingleChildScrollView(
+                    child: SelectableText(
+                      state.mOutputMessage,
+                      style: const TextStyle(color: Colors.white, fontSize: 16),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ); // Replace with your widget tree that uses 'state'
         },
       ),

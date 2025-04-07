@@ -14,28 +14,17 @@ find_open_port() {
 }
 
 open_server() {
-  # Use a unique build directory for the server
-  export FLUTTER_BUILD_DIR=build_server
-  flutter run --dart-define=APP_PORT="$APP_PORT" --target=lib/server.dart -d macos
+  flutter run --dart-define=APP_PORT="$APP_PORT" --target=networks_projects/lib/server.dart -d macos
 }
 
-open_player1() {
-  # Use a unique build directory for player1
-  export FLUTTER_BUILD_DIR=build_player1
-  flutter run --target=lib/player1.dart -d macos
-}
-
-open_player2() {
-  # Use a unique build directory for player2
-  export FLUTTER_BUILD_DIR=build_player2
-  flutter run --target=lib/player2.dart -d macos
+open_user() {
+  flutter run --target=lib/client.dart -d macos
 }
 
 # Set the open port to an environment variable
 export APP_PORT=$(find_open_port)
 echo "✅ Found open port: $APP_PORT"
 
-# Change directory to your project folder
 cd networks_projects
 
 # Run the server in the background
@@ -44,8 +33,8 @@ open_server &
 sleep 5
 
 # Launch two instances of the user client concurrently
-open_player1 &
-open_player2 &
+open_user &
+open_user &
 
 # Wait for all background processes to complete
 wait
