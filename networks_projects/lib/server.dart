@@ -81,6 +81,9 @@ class ServerController extends Cubit<ServerNode> {
         client.close();
       }
     });
+    void processRequest(HttpRequest request) {}
+    void sendData() {}
+    void updateData() {}
   }
 
   void _listenToClient(Socket client, String playerID) {
