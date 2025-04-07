@@ -43,7 +43,7 @@ class ServerController extends Cubit<ServerNode> {
   Future<void> connect() async {
     ServerSocket? server = await ServerSocket.bind(
       InternetAddress.anyIPv4,
-      port,
+      9203,
     );
 
     emit(
@@ -108,9 +108,9 @@ class ServerController extends Cubit<ServerNode> {
   }
 }
 
-void main() {
-  runApp(const MyApp());
-}
+void main() => runApp(
+  BlocProvider(create: (context) => ServerController(), child: MyApp()),
+);
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
@@ -136,6 +136,13 @@ class NetworkingMasterNode extends StatefulWidget {
 }
 
 class _NetworkingMasterPage extends State<NetworkingMasterNode> {
+  @override
+  void initState() {
+    super.initState();
+    // Start the server when the widget is initialized.
+    context.read<ServerController>().connect();
+  }
+
   @override
   Widget build(BuildContext context) {
     return BlocProvider(

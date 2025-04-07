@@ -14,29 +14,18 @@ find_open_port() {
 }
 
 open_server() {
-  flutter run --dart-define=APP_PORT="$APP_PORT" --target=networks_projects/lib/server.dart -d macos
+  flutter run --dart-define=APP_PORT="$APP_PORT" --target=lib/server.dart -d macos
 }
 
 open_user() {
-  flutter run --target=lib/client.dart -d macos
+  flutter run --dart-define=APP_PORT="$APP_PORT" --target=lib/client.dart -d macos
 }
 
-# Set the open port to an environment variable
 export APP_PORT=$(find_open_port)
 echo "✅ Found open port: $APP_PORT"
 
 cd networks_projects
 
-# Run the server in the background
 open_server &
-# Wait a few seconds to allow the server to start up
-sleep 5
-
-# Launch two instances of the user client concurrently
-open_user &
-open_user &
-
-# Wait for all background processes to complete
-wait
 
 echo "All processes have finished."

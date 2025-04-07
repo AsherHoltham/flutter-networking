@@ -14,23 +14,26 @@ class PlayerController extends Cubit<Player> {
   PlayerController() : super(Player(null));
 
   void init() {
-    createServerConnection(port);
+    createServerConnection(9203);
   }
 
-  void createServerConnection(port) async {
-    final socket = await Socket.connect('localhost', port);
-    await Future.delayed(const Duration(seconds: 2));
+  void createServerConnection(int port) async {
+    final socket = await Socket.connect('127.0.0.1', 9203);
     emit(Player(socket));
   }
 
-  void getServerData() {}
+  Map<int, String> getServerData() {
+    return {};
+  }
+
   void sendMessage(String message) {
     state.mServer?.write(message);
   }
 }
 
-void main() =>
-    BlocProvider(create: (context) => PlayerController(), child: MyApp());
+void main() => runApp(
+  BlocProvider(create: (context) => PlayerController(), child: MyApp()),
+);
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
@@ -40,6 +43,7 @@ class MyApp extends StatelessWidget {
     final playerController = context.read<PlayerController>();
     final TextEditingController textController = TextEditingController();
 
+    playerController.init();
     return MaterialApp(
       home: Scaffold(
         body: Center(
