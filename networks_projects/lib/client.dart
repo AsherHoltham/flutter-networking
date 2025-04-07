@@ -3,36 +3,67 @@ import 'package:flutter/material.dart';
 import "package:flutter_bloc/flutter_bloc.dart";
 import 'dart:convert';
 
-const port = int.fromEnvironment('APP_PORT', defaultValue: 9203);
+const port = 9203;
 
 class Player {
-  Socket? mServer;
-  Player(this.mServer);
+  HttpClient? client;
+  Player(this.client);
 }
 
 class PlayerController extends Cubit<Player> {
-  PlayerController() : super(Player(null));
-
-  void init() {
-    createServerConnection(9203);
+  PlayerController() : super(Player(null)) {
+    connect();
   }
 
-  void createServerConnection(int port) async {
-    final socket = await Socket.connect('127.0.0.1', 9203);
-    emit(Player(socket));
+  Future<void> connect() async {
+    // For HTTP communication, we simply create an HttpClient.
+    HttpClient client = HttpClient();
+    emit(Player(client));
   }
 
-  Map<int, String> getServerData() {
-    return {};
+  Future<Map<int, String>> getServerData() async {
+    final client = state.client;
+    if (client == null) return {};
+    final url = Uri.parse("http://localhost:$port");
+    try {
+      final request = await client.getUrl(url);
+      final response = await request.close();
+      final responseBody = await response.transform(utf8.decoder).join();
+      // The server returns a JSON map of chat entries.
+      final Map<String, dynamic> data = jsonDecode(responseBody);
+      Map<int, String> chatMap = {};
+      data.forEach((key, value) {
+        chatMap[int.tryParse(key) ?? 0] =
+            "User: ${value['user']}, Message: ${value['message']}";
+      });
+      return chatMap;
+    } catch (e) {
+      print("Error fetching server data: $e");
+      return {};
+    }
   }
 
-  void sendMessage(String message) {
-    state.mServer?.write(message);
+  Future<void> sendMessage(String message) async {
+    final client = state.client;
+    if (client == null) return;
+    final url = Uri.parse("http://localhost:$port");
+    try {
+      final request = await client.postUrl(url);
+      // Create a JSON payload. You can modify the 'user' field as needed.
+      final payload = jsonEncode({"message": message, "user": "Player"});
+      request.headers.contentType = ContentType.json;
+      request.write(payload);
+      final response = await request.close();
+      final responseBody = await response.transform(utf8.decoder).join();
+      print("Response from server: $responseBody");
+    } catch (e) {
+      print("Error sending message: $e");
+    }
   }
 }
 
 void main() => runApp(
-  BlocProvider(create: (context) => PlayerController(), child: MyApp()),
+  BlocProvider(create: (context) => PlayerController(), child: const MyApp()),
 );
 
 class MyApp extends StatelessWidget {
@@ -43,9 +74,9 @@ class MyApp extends StatelessWidget {
     final playerController = context.read<PlayerController>();
     final TextEditingController textController = TextEditingController();
 
-    playerController.init();
     return MaterialApp(
       home: Scaffold(
+        appBar: AppBar(title: const Text("Player Chat")),
         body: Center(
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,

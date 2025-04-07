@@ -17,99 +17,85 @@ class SharedData {
   int mIndex = 0;
   void chat(String message, String user) {
     mChatLog[mIndex] = ChatLog(message, user);
+    mIndex++;
   }
 }
 
 class ServerNode {
-  Socket? mFirstPlayer;
-  Socket? mSecondPlayer;
+  HttpServer? mServer;
   SharedData mData;
   final String mOutputMessage;
 
-  ServerNode(
-    this.mFirstPlayer,
-    this.mSecondPlayer,
-    this.mData,
-    this.mOutputMessage,
-  );
+  ServerNode(this.mServer, this.mData, this.mOutputMessage);
 }
 
 class ServerController extends Cubit<ServerNode> {
   ServerController()
-    : super(
-        ServerNode(null, null, SharedData(), "Waiting on Players to connect!"),
-      );
+    : super(ServerNode(null, SharedData(), "Server initializing...")) {
+    connect();
+  }
 
   Future<void> connect() async {
-    ServerSocket? server = await ServerSocket.bind(
-      InternetAddress.anyIPv4,
-      9203,
-    );
-
+    // Bind the HTTP server to any IPv4 address on the specified port.
+    HttpServer server = await HttpServer.bind(InternetAddress.anyIPv4, port);
     emit(
       ServerNode(
-        null,
-        null,
+        server,
         state.mData,
-        "Server started, waiting for players...",
+        "Server started on port $port. Ready to receive messages.",
       ),
     );
 
-    server.listen((client) {
-      if (state.mFirstPlayer == null) {
-        emit(
-          ServerNode(
-            client,
-            state.mSecondPlayer,
-            state.mData,
-            "First Player Connected, Awaiting second player...",
-          ),
-        );
-        _listenToClient(client, "Player 1 Joined");
-      } else if (state.mSecondPlayer == null) {
-        emit(
-          ServerNode(
-            state.mFirstPlayer,
-            client,
-            state.mData,
-            "Both Players Connected!",
-          ),
-        );
-        _listenToClient(client, "Player 2 Joined");
+    // Listen for HTTP requests.
+    server.listen((HttpRequest request) async {
+      if (request.method == 'POST') {
+        try {
+          // Read and decode the incoming JSON payload.
+          final content = await utf8.decoder.bind(request).join();
+          Map<String, dynamic> data = jsonDecode(content);
+          String message = data['message'] ?? "";
+          String user = data['user'] ?? "Unknown";
+
+          // Log the chat message.
+          state.mData.chat(message, user);
+          String logEntry = "$user: $message";
+          emit(ServerNode(server, state.mData, "Received: $logEntry"));
+
+          // Respond to the client.
+          request.response
+            ..statusCode = HttpStatus.ok
+            ..write("Message received: $logEntry");
+          await request.response.close();
+        } catch (e) {
+          request.response
+            ..statusCode = HttpStatus.badRequest
+            ..write("Invalid request: $e");
+          await request.response.close();
+        }
+      } else if (request.method == 'GET') {
+        // Return the current chat log as JSON.
+        request.response.headers.contentType = ContentType.json;
+        Map<String, dynamic> chatMap = {};
+        state.mData.mChatLog.forEach((key, chatLog) {
+          chatMap[key.toString()] = {
+            'user': chatLog.mUser,
+            'message': chatLog.mMessage,
+          };
+        });
+        request.response.write(jsonEncode(chatMap));
+        await request.response.close();
       } else {
-        client.write('Server full!\n');
-        client.close();
+        request.response
+          ..statusCode = HttpStatus.methodNotAllowed
+          ..write("Unsupported method");
+        await request.response.close();
       }
-    });
-    void processRequest(HttpRequest request) {}
-    void sendData() {}
-    void updateData() {}
-  }
-
-  void _listenToClient(Socket client, String playerID) {
-    client.listen((data) {
-      final String message = utf8.decode(data).trim();
-      final String logEntry = "$playerID: $message";
-
-      state.mData.chat(message, playerID);
-      emit(
-        ServerNode(
-          state.mFirstPlayer,
-          state.mSecondPlayer,
-          state.mData,
-          "Message Received from $playerID",
-        ),
-      );
-
-      // Broadcasting message to both players
-      state.mFirstPlayer?.write("$logEntry\n");
-      state.mSecondPlayer?.write("$logEntry\n");
     });
   }
 }
 
 void main() => runApp(
-  BlocProvider(create: (context) => ServerController(), child: MyApp()),
+  BlocProvider(create: (context) => ServerController(), child: const MyApp()),
 );
 
 class MyApp extends StatelessWidget {
@@ -137,45 +123,30 @@ class NetworkingMasterNode extends StatefulWidget {
 
 class _NetworkingMasterPage extends State<NetworkingMasterNode> {
   @override
-  void initState() {
-    super.initState();
-    // Start the server when the widget is initialized.
-    context.read<ServerController>().connect();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    return BlocProvider(
-      create: (_) => ServerController(),
-      child: BlocBuilder<ServerController, ServerNode>(
-        builder: (context, state) {
-          // Use the provided 'state' directly here.
-          return Scaffold(
-            body: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(16.0),
-                  decoration: BoxDecoration(
-                    color: Colors.black87,
-                    borderRadius: BorderRadius.circular(8.0),
-                    border: Border.all(color: Colors.grey),
-                  ),
-                  constraints: const BoxConstraints(
-                    maxHeight: 200, // Limits the height; adjust as needed.
-                  ),
-                  child: SingleChildScrollView(
-                    child: SelectableText(
-                      state.mOutputMessage,
-                      style: const TextStyle(color: Colors.white, fontSize: 16),
-                    ),
-                  ),
+    return BlocBuilder<ServerController, ServerNode>(
+      builder: (context, state) {
+        return Scaffold(
+          appBar: AppBar(title: Text(widget.title)),
+          body: Center(
+            child: Container(
+              padding: const EdgeInsets.all(16.0),
+              decoration: BoxDecoration(
+                color: Colors.black87,
+                borderRadius: BorderRadius.circular(8.0),
+                border: Border.all(color: Colors.grey),
+              ),
+              constraints: const BoxConstraints(maxHeight: 200),
+              child: SingleChildScrollView(
+                child: SelectableText(
+                  state.mOutputMessage,
+                  style: const TextStyle(color: Colors.white, fontSize: 16),
                 ),
-              ],
+              ),
             ),
-          ); // Replace with your widget tree that uses 'state'
-        },
-      ),
+          ),
+        );
+      },
     );
   }
 }
